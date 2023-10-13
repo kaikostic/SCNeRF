@@ -1,4 +1,4 @@
-import camera_model as cam_model
+import model.camera_model as cam_model
 
 pinhole_rot_noise_10k_od = cam_model.PinholeModelRotNoiseLearning10kRayoRayd
 pinhole_rot_noise_10k_od_dist = cam_model.PinholeModelRotNoiseLearning10kRayoRaydDistortion

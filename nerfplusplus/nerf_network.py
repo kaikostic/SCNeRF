@@ -79,7 +79,6 @@ class MLPNet(nn.Module):
         :param use_viewdirs: if True, will use the view directions as input
         '''
         super().__init__()
-
         self.input_ch = input_ch
         self.input_ch_viewdirs = input_ch_viewdirs
         self.use_viewdirs = use_viewdirs

@@ -82,8 +82,8 @@ def visualize_cameras(colored_camera_dicts, sphere_radius, camera_size=0.1, geom
             raise Exception('Unknown geometry_type: ', geometry_type)
 
         things_to_draw.append(geometry)
-
-    o3d.visualization.draw_geometries(things_to_draw)
+    print(things_to_draw)
+    o3d.visualization.draw_plotly(things_to_draw)
 
 
 if __name__ == '__main__':
@@ -95,6 +95,7 @@ if __name__ == '__main__':
     train_cam_dict = json.load(open(os.path.join(base_dir, 'train/cam_dict_norm.json')))
     test_cam_dict = json.load(open(os.path.join(base_dir, 'test/cam_dict_norm.json')))
     path_cam_dict = json.load(open(os.path.join(base_dir, 'camera_path/cam_dict_norm.json')))
+   
     camera_size = 0.1
     colored_camera_dicts = [([0, 1, 0], train_cam_dict),
                             ([0, 0, 1], test_cam_dict),
@@ -103,6 +104,5 @@ if __name__ == '__main__':
 
     geometry_file = os.path.join(base_dir, 'mesh_norm.ply')
     geometry_type = 'mesh'
-
     visualize_cameras(colored_camera_dicts, sphere_radius, 
                       camera_size=camera_size, geometry_file=geometry_file, geometry_type=geometry_type)

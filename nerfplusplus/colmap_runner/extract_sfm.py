@@ -1,9 +1,9 @@
-from read_write_model import read_model
 import numpy as np
 import json
 import os
 from pyquaternion import Quaternion
 import trimesh
+from read_write_model import read_model
 
 
 def parse_tracks(colmap_images, colmap_points3D):
@@ -114,7 +114,7 @@ def extract_all_to_dir(sparse_dir, out_dir, ext='.bin'):
 
 
 if __name__ == '__main__':
-    mvs_dir = '/home/zhangka2/sg_render/run_mvs/scan114_train_5/colmap_mvs/mvs'
+    mvs_dir = '/home/jupyter/SCNeRF/nerfplusplus/data/nerfp/mvs'
     sparse_dir = os.path.join(mvs_dir, 'sparse')
     out_dir = os.path.join(mvs_dir, 'sparse_inspect')
     extract_all_to_dir(sparse_dir, out_dir)

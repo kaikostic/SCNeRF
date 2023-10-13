@@ -58,6 +58,7 @@ def intersect_sphere(ray_o, ray_d):
     # consider the case where the ray does not intersect the sphere
     ray_d_cos = 1. / torch.norm(ray_d, dim=-1)
     p_norm_sq = torch.sum(p * p, dim=-1)
+    #print('p_norm_sq',p_norm_sq)
     if (p_norm_sq >= 1.).any():
         raise Exception("""
         Not all your cameras are bounded by the unit sphere; please make sure 
@@ -256,7 +257,7 @@ def render_single_image(rank, world_size, models, ray_sampler, chunk_size, camer
         return None
 
 
-def log_view_to_tb(global_step, log_data, gt_img, mask, prefix=''):
+def log_view_to_tb(global_step, log_data, gt_img, mask_path=None, prefix=''):
     rgb_im = img_HWC2CHW(torch.from_numpy(gt_img))
     
     image_dict = {}
@@ -274,7 +275,7 @@ def log_view_to_tb(global_step, log_data, gt_img, mask, prefix=''):
 
         depth = log_data[m]['fg_depth']
         depth_im = img_HWC2CHW(colorize(depth, cmap_name='jet', append_cbar=True,
-                                        mask=mask))
+                                        mask_path=mask_path))
         image_dict[prefix + 'level_{}/fg_depth'.format(m)] = wandb.Image(depth_im)
 
         rgb_im = img_HWC2CHW(log_data[m]['bg_rgb'])
@@ -283,12 +284,12 @@ def log_view_to_tb(global_step, log_data, gt_img, mask, prefix=''):
 
         depth = log_data[m]['bg_depth']
         depth_im = img_HWC2CHW(colorize(depth, cmap_name='jet', append_cbar=True,
-                                        mask=mask))
+                                        mask_path=mask_path))
         image_dict[prefix + 'level_{}/bg_depth'.format(m)] = wandb.Image(depth_im)
 
         bg_lambda = log_data[m]['bg_lambda']
         bg_lambda_im = img_HWC2CHW(colorize(bg_lambda, cmap_name='hot', append_cbar=True,
-                                            mask=mask))
+                                            mask_path=mask_path))
         image_dict[prefix + 'level_{}/bg_lambda'.format(m)] = wandb.Image(bg_lambda_im)
     
     wandb.log(image_dict, step=global_step)
@@ -329,9 +330,8 @@ def ddp_train_nerf(rank, args):
                 file.write(open(args.config, 'r').read())
     torch.distributed.barrier()
 
-    ray_samplers, camera_info = load_data_split(args.datadir, args.scene, split='train',
+    ray_samplers, camera_info = load_data_split(args.datadir, args.scene, split='train', dscale=args.down_scale,
                                    try_load_min_depth=args.load_min_depth, args=args)
-
     if args.run_fisheye:
         render = "train"
     else:
@@ -346,6 +346,10 @@ def ddp_train_nerf(rank, args):
         image_pair_cache = {}
         with torch.no_grad():
             feasible_image_pairs = image_pair_candidates(extrinsics, args)
+        #print(ray_samplers[1])
+        #print('ray')
+        #print(ray.shape for ray in ray_samplers)
+        #print(ray_samplers.img)
         images = get_images(ray_samplers)
 
     # write training image names for autoexposure
@@ -427,13 +431,16 @@ def ddp_train_nerf(rank, args):
         for m in range(models['cascade_level']):
 
             if m == 0: 
+                #print('m==0',)
                 ray_batch, select_inds = ray_samplers[img_i].random_sample(
                     args.N_rand, camera_model, img_i, rank
                 )
+                #print(ray_batch)
             else: 
                 ray_batch, _ = ray_samplers[img_i].random_sample(
                     args.N_rand, camera_model, img_i, rank, select_inds=select_inds
                 )
+                #print('else',ray_batch['ray_d'])
 
             # forward and backward
             dots_sh = list(ray_batch['ray_d'].shape[:-1])  # number of rays
@@ -474,18 +481,21 @@ def ddp_train_nerf(rank, args):
             
             ret = net(ray_batch['ray_o'], ray_batch['ray_d'], fg_far_depth, fg_depth, bg_depth, img_name=ray_batch['img_name'])
             all_rets.append(ret)
-
+            #print('dasdsadsadsa',ray_batch['rgb'])
             rgb_gt = ray_batch['rgb'].to(rank)
+            mask = ray_batch['mask'].to(rank)
+            mask_path = ray_batch['mask_path_W_H']
             if 'autoexpo' in ret:
                 scale, shift = ret['autoexpo']
                 scalars_to_log['level_{}/autoexpo_scale'.format(m)] = scale.item()
                 scalars_to_log['level_{}/autoexpo_shift'.format(m)] = shift.item()
                 # rgb_gt = scale * rgb_gt + shift
                 rgb_pred = (ret['rgb'] - shift) / scale
-                rgb_loss = img2mse(rgb_pred, rgb_gt)
+                rgb_loss = img2mse(rgb_pred, rgb_gt,mask=mask)
                 loss = loss + rgb_loss + args.lambda_autoexpo * (torch.abs(scale-1.)+torch.abs(shift))
             else:
-                rgb_loss = img2mse(ret['rgb'], rgb_gt)
+                ###Checka över maskning här, klar
+                rgb_loss = img2mse(ret['rgb'], rgb_gt, mask=mask)
                 loss = loss + rgb_loss
 
             if m == models['cascade_level'] - 1 and \
@@ -525,7 +535,7 @@ def ddp_train_nerf(rank, args):
                 rays_j = render_ray_from_camera(
                     camera_model, img_j, kps1_list_flatten, rank
                 )
-
+                #Maska lossen är 
                 prd_loss, num_matches = proj_ray_dist_loss_single(
                     kps0_list=kps0_list,
                     kps1_list=kps1_list,
@@ -586,7 +596,7 @@ def ddp_train_nerf(rank, args):
             dt = time.time() - time0
             if rank == 0:    # only main process should do this
                 logger.info('Logged a random validation view in {} seconds'.format(dt))
-                log_view_to_tb(global_step, log_data, gt_img=val_ray_samplers[idx].get_img(), mask=None, prefix='val/')
+                log_view_to_tb(global_step, log_data, gt_img=val_ray_samplers[idx].get_img(), mask_path=mask_path, prefix='val/')
 
             time0 = time.time()
             idx = what_train_to_log % len(ray_samplers)
@@ -595,7 +605,7 @@ def ddp_train_nerf(rank, args):
             dt = time.time() - time0
             if rank == 0:   # only main process should do this
                 logger.info('Logged a random training view in {} seconds'.format(dt))
-                log_view_to_tb(global_step, log_data, gt_img=ray_samplers[idx].get_img(), mask=None, prefix='train/')
+                log_view_to_tb(global_step, log_data, gt_img=ray_samplers[idx].get_img(), mask_path=mask_path, prefix='train/')
 
             del log_data
             torch.cuda.empty_cache()    

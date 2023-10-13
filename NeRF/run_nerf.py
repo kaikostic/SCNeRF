@@ -70,7 +70,7 @@ from unit_tests.visualize_matches import unit_test_matches
 
 #################################################################
 
-from prd_evaluation import projected_ray_distance_evaluation
+from model.prd_evaluation import projected_ray_distance_evaluation
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 run_unit_test = lambda args, kwargs, test_name: None if not args.debug else \

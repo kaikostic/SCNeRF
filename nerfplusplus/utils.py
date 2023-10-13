@@ -2,6 +2,9 @@ import torch
 # import torch.nn as nn
 # import torch.nn.functional as F
 import numpy as np
+from PIL import Image
+from torchvision import transforms as T
+
 
 
 HUGE_NUMBER = 1e10
@@ -114,10 +117,20 @@ def colorize_np(x, cmap_name='jet', mask=None, append_cbar=False):
 
 
 # tensor
-def colorize(x, cmap_name='jet', append_cbar=False, mask=None):
+def colorize(x, cmap_name='jet', append_cbar=False, mask_path=None):
     x = x.numpy()
-    if mask is not None:
-        mask = mask.numpy().astype(dtype=np.bool)
+    #peError: can't convert cuda:0 device type tensor to numpy. Use Tensor.cpu() to copy the tensor to host memory first.
+    #läs ut H och W från x. Fulokda. Fixa H och W från nerf_sample_ray_split
+    H,W=mask_path[-2:]
+    if mask_path is not None:
+        mask = Image.open(mask_path[0]).convert('L')        
+        #self.mask = cv2.resize(self.mask, (self.W, self.H), interpolation=cv2.INTER_NEAREST)
+        #Checka Size of X och casta masken så den håller samma shape!!!!!!!
+        mask = mask.resize((W, H),Image.Resampling.LANCZOS)
+        mask = T.ToTensor()(mask).to(torch.uint8)
+        mask = mask.squeeze()
+        mask = mask.cpu().numpy()
+        mask = mask.astype(dtype=bool)
     x, cbar = colorize_np(x, cmap_name, mask)
 
     if append_cbar:

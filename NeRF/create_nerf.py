@@ -12,7 +12,7 @@ from run_nerf_helpers import (
     NeRF,
 )
 
-from camera_dict import camera_dict
+from model.camera_dict import camera_dict
 
 
 def run_network(inputs, viewdirs, fn, embed_fn, embeddirs_fn, netchunk=1024 * 64):
