@@ -14,6 +14,9 @@ from utils import mse2psnr, colorize_np, to8b
 import imageio
 from ddp_train_nerf import config_parser, setup_logger, setup, cleanup, render_single_image, create_nerf
 import logging
+from PIL import Image
+from torchvision import transforms as T
+import json
 
 from piqa.ssim import SSIM
 from piqa.lpips import LPIPS
@@ -145,7 +148,8 @@ def ddp_test_nerf(rank, args):
         train_psnr_list = []
         train_ssim_list = []
         train_lpips_list = []
-
+        train_json={}
+        
         if not args.prd_only:
 
             for idx in range(len(ray_samplers)):
@@ -163,9 +167,22 @@ def ddp_test_nerf(rank, args):
                 dt = time.time() - time0
                 if rank == 0:    # only main process should do this
                     logger.info('Rendered {} in {} seconds'.format(fname, dt))
-
+                    
                     # only save last level
                     im = ret[-1]['rgb'].cpu().numpy()
+                    H = im.shape[0]
+                    W = im.shape[1]
+                    mask_path = ray_samplers[00].mask_path
+                    mask = Image.open(mask_path).convert('L')
+
+                
+                    #self.mask = cv2.resize(self.mask, (self.W, self.H), interpolation=cv2.INTER_NEAREST)
+                    mask = mask.resize((W, H),Image.Resampling.LANCZOS)
+                    mask = T.ToTensor()(mask).to(torch.uint8)
+                    mask = mask.permute(1,2,0)
+                    mask = mask.cpu().numpy()
+                    #mask = mask.reshape((-1))
+                    im=im*mask
                     # compute psnr if ground-truth is available
                     if ray_samplers[idx].img_path is not None:
                         gt_im = ray_samplers[idx].get_img()
@@ -194,7 +211,11 @@ def ddp_test_nerf(rank, args):
                         train_psnr_list.append(psnr)
                         train_ssim_list.append(ssim)
                         train_lpips_list.append(lpips)
-
+                        train_json_mid={}
+                        train_json_mid["psnr"]=psnr
+                        train_json_mid["ssim"]=ssim
+                        train_json_mid["lpips"]=lpips
+                        train_json["{}".format(fname)]=train_json_mid
                     im = to8b(im)
                     imageio.imwrite(os.path.join(out_dir, fname), im)
 
@@ -225,6 +246,7 @@ def ddp_test_nerf(rank, args):
             )
 
     if rank == 0:
+        ###
         psnr_mean = np.mean(np.array(train_psnr_list))
         ssim_mean = np.mean(np.array(train_ssim_list))
         lpips_mean =  np.mean(np.array(train_lpips_list))
@@ -233,7 +255,15 @@ def ddp_test_nerf(rank, args):
         print("SSIM: ", ssim_mean)
         print("LPIPS: ", lpips_mean)
         print("PRD: ", prd_mean)
-
+        mean_dict={}
+        mean_dict["psnr"]=psnr_mean
+        mean_dict["ssim"]=ssim_mean
+        mean_dict["lpips"]=lpips_mean
+        mean_dict["prd"]=prd_mean
+        train_json["average"]=mean_dict
+        json_dir=os.path.join(out_dir,args.expname+".json")
+        with open(json_dir,"w") as f:
+            json.dump(train_json,f)
         with open(args.expname + ".txt", "w") as fp:
             fp.write(f"PSNR : {str(psnr_mean)}\n")
             fp.write(f"SSIM : {str(ssim_mean)}\n")

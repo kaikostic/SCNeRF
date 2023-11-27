@@ -8,6 +8,7 @@ from normalize_cam_dict import normalize_cam_dict
 # ########################################################################
 
 colmap_bin = '/opt/conda/bin/colmap'
+camera_model = "RADIAL_FISHEYE"
 
 def bash_run(cmd):
     cmd = colmap_bin + ' ' + cmd
@@ -19,7 +20,7 @@ def bash_run(cmd):
 gpu_index = '-1'
 
 
-def run_sift_matching(img_dir, db_file, remove_exist=False,camera_model="SIMPLE_RADIAL"):
+def run_sift_matching(img_dir, db_file, mask_dir, remove_exist=False):
     print('Running sift matching...')
 
     if remove_exist and os.path.exists(db_file):
@@ -31,6 +32,7 @@ def run_sift_matching(img_dir, db_file, remove_exist=False,camera_model="SIMPLE_
     ##Add mask path --ImageReader.mask_path 
     cmd = ' feature_extractor --database_path {} \
                                     --image_path {} \
+                                    --ImageReader.mask_path {} \
                                     --ImageReader.single_camera 1 \
                                     --ImageReader.camera_model {} \
                                     --SiftExtraction.max_image_size 5000  \
@@ -38,7 +40,7 @@ def run_sift_matching(img_dir, db_file, remove_exist=False,camera_model="SIMPLE_
                                     --SiftExtraction.domain_size_pooling 0 \
                                     --SiftExtraction.use_gpu 1 \
                                     --SiftExtraction.max_num_features 16384 \
-                                    --SiftExtraction.gpu_index {}'.format(db_file, img_dir, camera_model ,gpu_index)
+                                    --SiftExtraction.gpu_index {}'.format(db_file, img_dir, mask_dir, camera_model, gpu_index)
     bash_run(cmd)
 
     # feature matching
@@ -115,7 +117,7 @@ def run_possion_mesher(in_ply, out_ply, trim):
     bash_run(cmd)
 
 
-def main(img_dir, out_dir, run_mvs=False, camera_model="SIMPLE_RADIAL"):
+def main(img_dir, out_dir, mask_dir, run_mvs=False):
     os.makedirs(out_dir, exist_ok=True)
 
     #### run sfm
@@ -128,7 +130,7 @@ def main(img_dir, out_dir, run_mvs=False, camera_model="SIMPLE_RADIAL"):
     os.symlink(img_dir, img_dir_link)
 
     db_file = os.path.join(sfm_dir, 'database.db')
-    run_sift_matching(img_dir, db_file, remove_exist=False,camera_model=camera_model)
+    run_sift_matching(img_dir, db_file, mask_dir, remove_exist=False)
     sparse_dir = os.path.join(sfm_dir, 'sparse')
     os.makedirs(sparse_dir, exist_ok=True)
     ###Changed 
@@ -169,9 +171,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser("")
     parser.add_argument("--img_dir", required=True, help="path to image dir")
     parser.add_argument("--out_dir", required=True, help="path to save output")
-    parser.add_argument("--camera_model",required=True,help="Define camera model, check https://colmap.github.io/cameras.html for guidance")
+    parser.add_argument("--mask_dir", required=False,help="path to masks")
     args = parser.parse_args()
-    camera_model=args.camera_model
+
     run_mvs = False
-    main(args.img_dir, args.out_dir, run_mvs=run_mvs,camera_model=args.camera_model)
+    main(args.img_dir, args.out_dir, run_mvs=run_mvs)
 

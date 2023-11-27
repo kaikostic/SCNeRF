@@ -5,6 +5,7 @@ sys.path.append("..")
 from src.utils import str2bool
 import configargparse
 
+
 def config_parser():
     parser = configargparse.ArgumentParser()
     parser.add_argument('--config', is_config_file=True, help='config file path')
@@ -13,6 +14,7 @@ def config_parser():
     # dataset options
     parser.add_argument("--datadir", type=str, default=None, help='input data directory')
     parser.add_argument("--scene", type=str, default=None, help='scene name')
+    parser.add_argument("--down_scale", type=int, default=2, help='Downscale factor to reduce img size')
     parser.add_argument("--testskip", type=int, default=8,
                         help='will load 1/N images from test/val sets, useful for large datasets like deepvoxels')
     # model size

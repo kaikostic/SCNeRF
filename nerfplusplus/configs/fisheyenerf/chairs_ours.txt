@@ -4,7 +4,7 @@ scene = chairs
 expname = chairs_ours
 basedir = ./logs
 config = None
-ckpt_path = None
+ckpt_path = SCNeRF/nerfplusplus/logs/IC_patient_000
 no_reload = False
 testskip = 1
 

@@ -7,8 +7,9 @@ import torch.nn.functional as F
 import cv2
 
 import sys
-sys.path.insert(0, "../model")
-from camera_model import ortho2rotation, rotation2orth, make_rand_axis, R_axis_angle
+#sys.path.insert(0, "../model")
+sys.path.append('..')
+from model.camera_model import ortho2rotation, rotation2orth, make_rand_axis, R_axis_angle
 
 
 trans_t = lambda t : torch.Tensor([

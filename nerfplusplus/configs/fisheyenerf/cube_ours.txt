@@ -1,5 +1,5 @@
 ### INPUT
-datadir = data/fisheyenerf
+datadir = /home/jupyter/SCNeRF/nerfplusplus/data/fisheyenerf
 scene = cube
 expname = cube_ours
 basedir = ./logs

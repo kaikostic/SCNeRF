@@ -1,5 +1,5 @@
-from reprojection import runSuperGlueSinglePair,image_pair_candidates, runSIFTSinglePair
-from ray_dist_loss import preprocess_match, proj_ray_dist_loss_single
+from model.reprojection import runSuperGlueSinglePair,image_pair_candidates, runSIFTSinglePair
+from model.ray_dist_loss import preprocess_match, proj_ray_dist_loss_single
 import torch
 import numpy as np
 

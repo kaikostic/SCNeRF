@@ -3,6 +3,8 @@ from collections import OrderedDict
 import torch
 import cv2
 import imageio
+from PIL import Image
+from torchvision import transforms as T
 
 ########################################################################################################################
 # ray batch sampling
@@ -20,7 +22,16 @@ def get_rays_single_image(H, W, intrinsics, c2w, k=None):
     u = u.reshape(-1).astype(dtype=np.float32) + 0.5    # add half pixel
     v = v.reshape(-1).astype(dtype=np.float32) + 0.5
     pixels = np.stack((u, v, np.ones_like(u)), axis=0)  # (3, H*W)
+    #Save old to see the changes
+    old_pixels=pixels
+    if k is not None:
+        r2 = (pixels[:2] - np.array([[W/2], [H/2]])) / (np.array([[W / 2], [H / 2]]))
+        pixels[:2] = (pixels[:2] - np.array([[W/2], [H/2]])) * \
+            (1 + r2**2 * k[0] + r2**4 * k[1]) + np.array([[W/2], [H/2]])
+        
 
+
+    
     rays_d = np.dot(np.linalg.inv(intrinsics[:3, :3]), pixels)
     rays_d = np.dot(c2w[:3, :3], rays_d)  # (3, H*W)
     rays_d = rays_d.transpose((1, 0))  # (H*W, 3)
@@ -31,10 +42,6 @@ def get_rays_single_image(H, W, intrinsics, c2w, k=None):
     depth = np.linalg.inv(c2w)[2, 3]
     depth = depth * np.ones((rays_o.shape[0],), dtype=np.float32)  # (H*W,)
     
-    if k is not None:
-        r2 = (pixels[:2] - np.array([[W/2], [H/2]])) / (np.array([[W / 2], [H / 2]]))
-        pixels[:2] = (pixels[:2] - np.array([[W/2], [H/2]])) * \
-            (1 + r2**2 * k[0] + r2**4 * k[1]) + np.array([[W/2], [H/2]])
     
     return rays_o, rays_d, depth
 
@@ -70,15 +77,25 @@ class RaySamplerSingleImage(object):
             self.intrinsics[:2, :3] /= resolution_level
             # only load image at this time
             if self.img_path is not None:
+                
                 self.img = imageio.imread(self.img_path).astype(np.float32) / 255.
+                #print('img read',self.img.shape)
                 self.img = cv2.resize(self.img, (self.W, self.H), interpolation=cv2.INTER_AREA)
+                #print('cv2 resize',self.img.shape)
                 self.img = self.img.reshape((-1, 3))
+                #print('ray_samplers',self.img.shape)
             else:
                 self.img = None
 
             if self.mask_path is not None:
-                self.mask = imageio.imread(self.mask_path).astype(np.float32) / 255.
-                self.mask = cv2.resize(self.mask, (self.W, self.H), interpolation=cv2.INTER_NEAREST)
+                #self.mask = imageio.imread(self.mask_path).astype(np.float32) / 255.
+                self.mask = Image.open(self.mask_path).convert('L')
+
+                
+                #self.mask = cv2.resize(self.mask, (self.W, self.H), interpolation=cv2.INTER_NEAREST)
+                self.mask = self.mask.resize((self.W, self.H),Image.Resampling.LANCZOS)
+                self.mask = T.ToTensor()(self.mask).to(torch.uint8)
+                unique_mask = torch.unique(self.mask)
                 self.mask = self.mask.reshape((-1))
             else:
                 self.mask = None
@@ -96,6 +113,7 @@ class RaySamplerSingleImage(object):
 
     def get_img(self):
         if self.img is not None:
+            #print('self.img=',self.img.shape)
             return self.img.reshape((self.H, self.W, 3))
         else:
             return None
@@ -128,6 +146,7 @@ class RaySamplerSingleImage(object):
             ('depth', depth),
             ('rgb', self.img),
             ('mask', self.mask),
+            ('mask_path_W_H', (self.mask_path,self.W, self.H)),
             ('min_depth', min_depth)
         ])
         # return torch tensors
@@ -151,7 +170,7 @@ class RaySamplerSingleImage(object):
             depth = self.depth[select_inds]         # [N_rand, ]
         else:
             rays_o, rays_d, depth = render_ray_from_camera(
-                camera_model, camera_idx, select_inds, rank
+                camera_model, camera_idx, select_inds, rank, mask=self.mask
             )
 
         if self.img is not None:
@@ -177,6 +196,7 @@ class RaySamplerSingleImage(object):
             ('depth', depth),
             ('rgb', rgb),
             ('mask', mask),
+            ('mask_path_W_H', (self.mask_path,self.W, self.H)),
             ('min_depth', min_depth),
             ('img_name', self.img_path)
         ])
@@ -194,7 +214,7 @@ def render_ray(intrinsics, extrinsic, select_inds, H, W, rank):
     return rays_o[select_inds], rays_d[select_inds], depth[select_inds]
 
 def render_ray_from_camera(
-        camera_model, camera_idx, select_inds, rank, extrinsic=None
+        camera_model, camera_idx, select_inds, rank, extrinsic=None, mask=None
     ):    
     '''
     :param H: image height
@@ -215,15 +235,16 @@ def render_ray_from_camera(
 
     if isinstance(select_inds, torch.Tensor):
         select_inds = select_inds.cpu().detach().numpy()
-
     u, v = np.meshgrid(np.arange(W), np.arange(H))
     u = u.reshape(-1)[select_inds].astype(dtype=np.float32) + 0.5
     v = v.reshape(-1)[select_inds].astype(dtype=np.float32) + 0.5
     pixels = np.stack((u, v, np.ones_like(u)), axis=0)
     pixels = torch.from_numpy(pixels).to(rank)
-
     cx, cy = intrinsics[0, 2], intrinsics[1, 2]
 
+
+
+    ####Checka distortion noise
     if hasattr(camera_model, "distortion_noise"):
         (k0, k1) = camera_model.get_distortion()
         center = torch.stack([cx, cy]).view(2, -1)
@@ -245,6 +266,7 @@ def render_ray_from_camera(
     rays_d = torch.transpose(rays_d, 1, 0)
 
     rays_o = c2w[:3, 3].view(1, 3).repeat(N_rand, 1).to(rank)
+
 
     if hasattr(camera_model, "ray_o_noise"):
         rays_o = rays_o + camera_model.get_ray_o_noise()[select_inds].to(rank)

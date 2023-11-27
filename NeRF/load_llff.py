@@ -3,8 +3,9 @@ import os, imageio
 import torch
 import sys
 
-sys.path.insert(0, "../model")
-from camera_model import make_rand_axis, R_axis_angle
+#sys.path.insert(0, "../")
+sys.path.append("..")
+from model.camera_model import make_rand_axis, R_axis_angle
 
 ########## Slightly modified version of LLFF data loading code 
 ##########  see https://github.com/Fyusion/LLFF for original
@@ -111,7 +112,7 @@ def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
     
     def imread(f):
         if f.endswith('png'):
-            return imageio.imread(f, ignoregamma=True)
+            return imageio.imread(f,format='PNG-PIL', ignoregamma=True)
         else:
             return imageio.imread(f)
         
@@ -240,7 +241,7 @@ def spherify_poses(poses, bds):
 
 def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=False, path_zflat=False, args=None):
     
-
+    print('basedir:',basedir)
     poses, bds, imgs = _load_data(basedir, factor=factor) # factor=8 downsamples original imgs by 8x
     print('Loaded', basedir, bds.min(), bds.max())
     

@@ -460,8 +460,8 @@ def rotmat2qvec(R):
 
 def main():
     parser = argparse.ArgumentParser(description='Read and write COLMAP binary and text models')
-    parser.add_argument('input_model', help='path to input model folder')
-    parser.add_argument('input_format', choices=['.bin', '.txt'],
+    parser.add_argument('--input_model', help='path to input model folder')
+    parser.add_argument('--input_format', choices=['.bin', '.txt'],
                         help='input model format')
     parser.add_argument('--output_model', metavar='PATH',
                         help='path to output model folder')
