@@ -22,7 +22,16 @@ def get_rays_single_image(H, W, intrinsics, c2w, k=None):
     u = u.reshape(-1).astype(dtype=np.float32) + 0.5    # add half pixel
     v = v.reshape(-1).astype(dtype=np.float32) + 0.5
     pixels = np.stack((u, v, np.ones_like(u)), axis=0)  # (3, H*W)
+    #Save old to see the changes
+    old_pixels=pixels
+    if k is not None:
+        r2 = (pixels[:2] - np.array([[W/2], [H/2]])) / (np.array([[W / 2], [H / 2]]))
+        pixels[:2] = (pixels[:2] - np.array([[W/2], [H/2]])) * \
+            (1 + r2**2 * k[0] + r2**4 * k[1]) + np.array([[W/2], [H/2]])
+        
 
+
+    
     rays_d = np.dot(np.linalg.inv(intrinsics[:3, :3]), pixels)
     rays_d = np.dot(c2w[:3, :3], rays_d)  # (3, H*W)
     rays_d = rays_d.transpose((1, 0))  # (H*W, 3)
@@ -33,10 +42,6 @@ def get_rays_single_image(H, W, intrinsics, c2w, k=None):
     depth = np.linalg.inv(c2w)[2, 3]
     depth = depth * np.ones((rays_o.shape[0],), dtype=np.float32)  # (H*W,)
     
-    if k is not None:
-        r2 = (pixels[:2] - np.array([[W/2], [H/2]])) / (np.array([[W / 2], [H / 2]]))
-        pixels[:2] = (pixels[:2] - np.array([[W/2], [H/2]])) * \
-            (1 + r2**2 * k[0] + r2**4 * k[1]) + np.array([[W/2], [H/2]])
     
     return rays_o, rays_d, depth
 
@@ -230,7 +235,6 @@ def render_ray_from_camera(
 
     if isinstance(select_inds, torch.Tensor):
         select_inds = select_inds.cpu().detach().numpy()
-    ##Shapea pixlarna så att de är tomma vid maskning?
     u, v = np.meshgrid(np.arange(W), np.arange(H))
     u = u.reshape(-1)[select_inds].astype(dtype=np.float32) + 0.5
     v = v.reshape(-1)[select_inds].astype(dtype=np.float32) + 0.5
@@ -264,7 +268,6 @@ def render_ray_from_camera(
     rays_o = c2w[:3, 3].view(1, 3).repeat(N_rand, 1).to(rank)
 
 
-    ##Maska här 
     if hasattr(camera_model, "ray_o_noise"):
         rays_o = rays_o + camera_model.get_ray_o_noise()[select_inds].to(rank)
 
